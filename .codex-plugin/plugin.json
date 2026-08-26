@@ -1,0 +1,14 @@
+{
+  "name": "sessionmail",
+  "version": "0.1.0",
+  "description": "A local, paired mailbox for AI coding agents that can't otherwise reach each other.",
+  "author": {
+    "name": "August Cayzer",
+    "url": "https://github.com/aicayzer"
+  },
+  "homepage": "https://github.com/aicayzer/sessionmail",
+  "repository": "https://github.com/aicayzer/sessionmail",
+  "license": "MIT",
+  "keywords": ["cli", "ai-agents", "messaging"],
+  "skills": "./skills/"
+}

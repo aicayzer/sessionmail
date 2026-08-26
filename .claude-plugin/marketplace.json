@@ -1,0 +1,14 @@
+{
+  "name": "sessionmail",
+  "owner": {
+    "name": "August Cayzer",
+    "url": "https://github.com/aicayzer"
+  },
+  "plugins": [
+    {
+      "name": "sessionmail",
+      "source": "./",
+      "description": "A fallback mailbox for AI coding agents that can't otherwise message each other."
+    }
+  ]
+}
