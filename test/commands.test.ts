@@ -79,3 +79,24 @@ test("purge with neither a code nor --older-than throws", () => {
   const dbPath = tempDbPath();
   assert.throws(() => commands.purge(undefined, undefined, dbPath));
 });
+
+test("recent spans multiple conversations, most recent first", () => {
+  const dbPath = tempDbPath();
+  const a = commands.pair(dbPath);
+  const b = commands.pair(dbPath);
+  commands.send(a.code, "from a", undefined, dbPath);
+  commands.send(b.code, "from b", undefined, dbPath);
+  const rows = commands.recent(10, dbPath);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].code, b.code);
+  assert.equal(rows[1].code, a.code);
+});
+
+test("recent respects the limit", () => {
+  const dbPath = tempDbPath();
+  const { code } = commands.pair(dbPath);
+  commands.send(code, "one", undefined, dbPath);
+  commands.send(code, "two", undefined, dbPath);
+  commands.send(code, "three", undefined, dbPath);
+  assert.equal(commands.recent(2, dbPath).length, 2);
+});

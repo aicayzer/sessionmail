@@ -56,6 +56,15 @@ program
   });
 
 program
+  .command("recent")
+  .description("Show the most recent messages across every conversation")
+  .option("--limit <n>", "how many messages to show", "10")
+  .action((opts: { limit: string }) => {
+    const messages = commands.recent(Number(opts.limit), dbPath()).reverse();
+    printRecentMessages(messages);
+  });
+
+program
   .command("list")
   .description("List every known conversation")
   .action(() => {
@@ -95,6 +104,20 @@ function printMessages(messages: commands.MessageRow[]): void {
     const provenance = JSON.parse(message.provenance) as { provider: string; cwd?: string };
     const context = provenance.cwd ? `${provenance.provider}, ${provenance.cwd}` : provenance.provider;
     console.log(`[${message.id}] ${message.sent_at} (${context})`);
+    console.log(message.text);
+    console.log("");
+  }
+}
+
+function printRecentMessages(messages: commands.RecentMessageRow[]): void {
+  if (messages.length === 0) {
+    console.log("No messages.");
+    return;
+  }
+  for (const message of messages) {
+    const provenance = JSON.parse(message.provenance) as { provider: string; cwd?: string };
+    const context = provenance.cwd ? `${provenance.provider}, ${provenance.cwd}` : provenance.provider;
+    console.log(`[${message.code}] ${message.sent_at} (${context}) — "${message.title}"`);
     console.log(message.text);
     console.log("");
   }

@@ -51,6 +51,7 @@ Neither Claude Code nor Codex can be woken by an external event today — both a
 | `join <code>` | Confirm a code is valid before using it |
 | `send <code> "text" [--title "..."]` | Send a message, optionally naming the conversation |
 | `check <code> [--since <id>]` | Read messages; omit `--since` for full history |
+| `recent [--limit N]` | The last few messages across every conversation, not just one |
 | `list` | Show every known conversation |
 | `log <code>` | Full history for any conversation, regardless of caller |
 | `rename <code> "title"` | Rename a conversation |

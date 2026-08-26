@@ -85,6 +85,23 @@ export function log(code: string, dbPath?: string): MessageRow[] {
   return check(code, undefined, dbPath);
 }
 
+export interface RecentMessageRow extends MessageRow {
+  title: string;
+}
+
+export function recent(limit: number, dbPath?: string): RecentMessageRow[] {
+  const db = getDb(dbPath);
+  return db
+    .prepare(
+      `SELECT m.id, m.code, m.provenance, m.text, m.sent_at, c.title
+       FROM messages m
+       JOIN conversations c ON c.code = m.code
+       ORDER BY m.id DESC
+       LIMIT ?`
+    )
+    .all(limit) as unknown as RecentMessageRow[];
+}
+
 export function list(dbPath?: string): ConversationSummary[] {
   const db = getDb(dbPath);
   return db
