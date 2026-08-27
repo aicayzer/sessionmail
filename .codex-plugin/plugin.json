@@ -1,6 +1,6 @@
 {
   "name": "sessionmail",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A local, paired mailbox for AI coding agents that can't otherwise reach each other.",
   "author": {
     "name": "August Cayzer",

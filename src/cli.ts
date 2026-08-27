@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { readFileSync } from "node:fs";
 import * as commands from "./commands.js";
 
 const program = new Command();
@@ -7,11 +8,15 @@ const program = new Command();
 program
   .name("sessionmail")
   .description("A local, paired mailbox for AI coding agents that can't otherwise reach each other.")
-  .version("0.1.0")
+  .version("0.2.0")
   .option("--db <path>", "override the mailbox database path");
 
 function dbPath(): string | undefined {
   return program.opts().db;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 program
@@ -31,44 +36,93 @@ program
   });
 
 program
-  .command("send <code> <text>")
+  .command("send <code> [text]")
   .description("Send a message in a conversation")
   .option("--title <title>", "rename the conversation")
-  .action((code: string, text: string, opts: { title?: string }) => {
-    const result = commands.send(code, text, opts.title, dbPath());
-    console.log(`Sent (message ${result.id}).`);
+  .option("--body-file <path>", "read the message body from a file instead of the command line")
+  .action((code: string, text: string | undefined, opts: { title?: string; bodyFile?: string }) => {
+    if (text !== undefined && opts.bodyFile) {
+      throw new Error("Pass either <text> or --body-file, not both.");
+    }
+    const body = opts.bodyFile ? readFileSync(opts.bodyFile, "utf8") : text;
+    if (body === undefined) {
+      throw new Error("Provide a message: either <text> or --body-file <path>.");
+    }
+    const result = commands.send(code, body, opts.title, dbPath());
+    console.log(`Sent — conversation message #${result.seq} (id ${result.id}).`);
   });
 
 program
   .command("check <code>")
   .description("Show messages since --since, or all messages if omitted")
   .option("--since <id>", "only messages after this message id")
-  .action((code: string, opts: { since?: string }) => {
-    const since = opts.since !== undefined ? Number(opts.since) : undefined;
-    printMessages(commands.check(code, since, dbPath()));
-  });
+  .option("--exclude-self", "omit messages sent by this same session")
+  .option("--wait", "block until a new message arrives, or the timeout elapses")
+  .option("--timeout <seconds>", "max seconds to wait with --wait", "300")
+  .option("--json", "output structured JSON instead of formatted text")
+  .action(
+    async (
+      code: string,
+      opts: { since?: string; excludeSelf?: boolean; wait?: boolean; timeout: string; json?: boolean }
+    ) => {
+      const since = opts.since !== undefined ? Number(opts.since) : undefined;
+      const excludeSelf = opts.excludeSelf ?? false;
+      let messages = commands.check(code, since, excludeSelf, dbPath());
+
+      if (opts.wait && messages.length === 0) {
+        const deadline = Date.now() + Number(opts.timeout) * 1000;
+        while (messages.length === 0 && Date.now() < deadline) {
+          await sleep(Math.min(2000, Math.max(0, deadline - Date.now())));
+          messages = commands.check(code, since, excludeSelf, dbPath());
+        }
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify(messages));
+      } else {
+        printMessages(messages);
+      }
+    }
+  );
 
 program
   .command("log <code>")
   .description("Show full history for a conversation, regardless of caller")
-  .action((code: string) => {
-    printMessages(commands.log(code, dbPath()));
+  .option("--json", "output structured JSON instead of formatted text")
+  .action((code: string, opts: { json?: boolean }) => {
+    const messages = commands.log(code, dbPath());
+    if (opts.json) {
+      console.log(JSON.stringify(messages));
+    } else {
+      printMessages(messages);
+    }
   });
 
 program
   .command("recent")
   .description("Show the most recent messages across every conversation")
   .option("--limit <n>", "how many messages to show", "10")
-  .action((opts: { limit: string }) => {
+  .option("--json", "output structured JSON instead of formatted text")
+  .action((opts: { limit: string; json?: boolean }) => {
     const messages = commands.recent(Number(opts.limit), dbPath()).reverse();
-    printRecentMessages(messages);
+    if (opts.json) {
+      console.log(JSON.stringify(messages));
+    } else {
+      printRecentMessages(messages);
+    }
   });
 
 program
   .command("list")
   .description("List every known conversation")
-  .action(() => {
-    printConversations(commands.list(dbPath()));
+  .option("--json", "output structured JSON instead of formatted text")
+  .action((opts: { json?: boolean }) => {
+    const conversations = commands.list(dbPath());
+    if (opts.json) {
+      console.log(JSON.stringify(conversations));
+    } else {
+      printConversations(conversations);
+    }
   });
 
 program
@@ -103,7 +157,7 @@ function printMessages(messages: commands.MessageRow[]): void {
   for (const message of messages) {
     const provenance = JSON.parse(message.provenance) as { provider: string; cwd?: string };
     const context = provenance.cwd ? `${provenance.provider}, ${provenance.cwd}` : provenance.provider;
-    console.log(`[${message.id}] ${message.sent_at} (${context})`);
+    console.log(`#${message.seq} (id ${message.id}) ${message.sent_at} (${context})`);
     console.log(message.text);
     console.log("");
   }
@@ -117,7 +171,9 @@ function printRecentMessages(messages: commands.RecentMessageRow[]): void {
   for (const message of messages) {
     const provenance = JSON.parse(message.provenance) as { provider: string; cwd?: string };
     const context = provenance.cwd ? `${provenance.provider}, ${provenance.cwd}` : provenance.provider;
-    console.log(`[${message.code}] ${message.sent_at} (${context}) — "${message.title}"`);
+    console.log(
+      `[${message.code}] #${message.seq} (id ${message.id}) ${message.sent_at} (${context}) — "${message.title}"`
+    );
     console.log(message.text);
     console.log("");
   }

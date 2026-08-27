@@ -39,20 +39,25 @@ From then on, both sides address the conversation by that code. There's no other
 | `sessionmail pair` | Start a new conversation, print its code |
 | `sessionmail join <code>` | Confirm a code is valid before using it |
 | `sessionmail send <code> "text" [--title "..."]` | Send a message, optionally naming the conversation |
-| `sessionmail check <code> [--since <id>]` | Read messages; omit `--since` for full history, or pass the last message id you saw for only what's new |
-| `sessionmail recent [--limit N]` | The last few messages across every conversation, not just one — for "what did the other agent just send" without needing to remember a code |
-| `sessionmail list` | Show every known conversation |
-| `sessionmail log <code>` | Full history for any conversation, even one you weren't part of |
+| `sessionmail send <code> --body-file <path>` | Send a message read from a file, instead of a shell argument |
+| `sessionmail check <code> [--since <id>] [--exclude-self] [--wait] [--timeout <seconds>] [--json]` | Read messages — see below |
+| `sessionmail recent [--limit N] [--json]` | The last few messages across every conversation, not just one — for "what did the other agent just send" without needing to remember a code |
+| `sessionmail list [--json]` | Show every known conversation |
+| `sessionmail log <code> [--json]` | Full history for any conversation, even one you weren't part of |
 | `sessionmail rename <code> "title"` | Rename a conversation |
 | `sessionmail purge <code>` / `purge --older-than <duration>` | Delete a conversation |
 
-## When to check
+Every message shows two numbers: `#N` is its position within that one conversation, and `(id M)` is a global id shared across every conversation on the machine — used only for `--since`. Don't infer anything from the global id changing; use `#N` (or `--exclude-self`) for that.
+
+## When and how to check
 
 There's no notification — checking is always a deliberate act. Check:
 
 - Right after joining or resuming a session that has an open pairing.
 - Before declaring a task finished, if a paired conversation might affect whether it's actually done.
 - Periodically during a long unattended run, if you're expecting a reply.
+
+**Prefer `check <code> --since <id> --wait` over hand-rolling a sleep loop.** It blocks until a new message arrives or the timeout elapses (default 300s, set with `--timeout`), so you don't need your own `sleep`-and-retry logic. Add `--exclude-self` if you don't want to be woken by your own sends. Add `--json` when parsing output in a script — it's structured and safe to parse, unlike the human-formatted default.
 
 ## More than two sides
 

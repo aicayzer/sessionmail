@@ -26,7 +26,7 @@ test("send then check returns the message", () => {
   const dbPath = tempDbPath();
   const { code } = commands.pair(dbPath);
   commands.send(code, "hello", undefined, dbPath);
-  const messages = commands.check(code, undefined, dbPath);
+  const messages = commands.check(code, undefined, false, dbPath);
   assert.equal(messages.length, 1);
   assert.equal(messages[0].text, "hello");
 });
@@ -36,9 +36,51 @@ test("check --since only returns messages newer than the given id", () => {
   const { code } = commands.pair(dbPath);
   const first = commands.send(code, "one", undefined, dbPath);
   commands.send(code, "two", undefined, dbPath);
-  const messages = commands.check(code, first.id, dbPath);
+  const messages = commands.check(code, first.id, false, dbPath);
   assert.equal(messages.length, 1);
   assert.equal(messages[0].text, "two");
+});
+
+test("send assigns a per-conversation seq independent of the global id", () => {
+  const dbPath = tempDbPath();
+  const a = commands.pair(dbPath);
+  const b = commands.pair(dbPath);
+  commands.send(a.code, "a1", undefined, dbPath);
+  const bFirst = commands.send(b.code, "b1", undefined, dbPath);
+  const aSecond = commands.send(a.code, "a2", undefined, dbPath);
+  assert.equal(bFirst.seq, 1);
+  assert.equal(aSecond.seq, 2);
+  assert.notEqual(aSecond.id, aSecond.seq);
+});
+
+test("send rejects an empty or whitespace-only body", () => {
+  const dbPath = tempDbPath();
+  const { code } = commands.pair(dbPath);
+  assert.throws(() => commands.send(code, "", undefined, dbPath));
+  assert.throws(() => commands.send(code, "   \n\t", undefined, dbPath));
+});
+
+test("check --exclude-self omits messages captured under this process's own session id", () => {
+  const dbPath = tempDbPath();
+  const { code } = commands.pair(dbPath);
+  const savedSessionId = process.env.CLAUDE_CODE_SESSION_ID;
+  process.env.CLAUDE_CODE_SESSION_ID = "self-session";
+  try {
+    commands.send(code, "from me", undefined, dbPath);
+    process.env.CLAUDE_CODE_SESSION_ID = "someone-else-session";
+    commands.send(code, "from someone else", undefined, dbPath);
+
+    process.env.CLAUDE_CODE_SESSION_ID = "self-session";
+    const filtered = commands.check(code, undefined, true, dbPath);
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0].text, "from someone else");
+
+    const unfiltered = commands.check(code, undefined, false, dbPath);
+    assert.equal(unfiltered.length, 2);
+  } finally {
+    if (savedSessionId === undefined) delete process.env.CLAUDE_CODE_SESSION_ID;
+    else process.env.CLAUDE_CODE_SESSION_ID = savedSessionId;
+  }
 });
 
 test("send with --title renames the conversation", () => {

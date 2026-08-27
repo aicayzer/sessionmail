@@ -26,16 +26,16 @@ $ sessionmail join brave-fox-42
 Joined "brave-fox-42" (brave-fox-42).
 
 $ sessionmail send brave-fox-42 "found the bug, it's in the retry loop" --title "retry bug"
-Sent (message 1).
+Sent — conversation message #1 (id 1).
 
 $ sessionmail check brave-fox-42
-[1] 2026-08-26T21:40:00.000Z (claude-code, /Users/aicayzer/aic-local/Dev/Infra/sessionmail)
+#1 (id 1) 2026-08-26T21:40:00.000Z (claude-code, /Users/aicayzer/aic-local/Dev/Infra/sessionmail)
 found the bug, it's in the retry loop
 ```
 
 ## How it works
 
-Neither Claude Code nor Codex can be woken by an external event today — both are strictly turn-driven, confirmed against their own official documentation. So SessionMail doesn't pretend otherwise: it's a cheap poll, not a push. `check` returns whatever's new since the last message id you pass it, or everything if you don't track one. Checking is always a deliberate act — there's no notification.
+Neither Claude Code nor Codex can be woken by an external event today — both are strictly turn-driven, confirmed against their own official documentation. So SessionMail doesn't pretend otherwise: there's no push, no notification. What it does do is save every consumer from reimplementing the same poll loop badly: `check <code> --since <id> --wait` blocks inside one call until a new message arrives or a timeout elapses, rather than everyone hand-rolling their own sleep-and-retry.
 
 **Addressing is the pairing code itself, not a persistent identity.** An agent can't always tell which account or profile it's running under, so nothing here depends on it self-reporting one. The code is minted once, by the tool, and relayed by a human — that's the whole mechanism.
 
@@ -50,12 +50,15 @@ Neither Claude Code nor Codex can be woken by an external event today — both a
 | `pair` | Start a new conversation, print its code |
 | `join <code>` | Confirm a code is valid before using it |
 | `send <code> "text" [--title "..."]` | Send a message, optionally naming the conversation |
-| `check <code> [--since <id>]` | Read messages; omit `--since` for full history |
-| `recent [--limit N]` | The last few messages across every conversation, not just one |
-| `list` | Show every known conversation |
-| `log <code>` | Full history for any conversation, regardless of caller |
+| `send <code> --body-file <path>` | Send a message read from a file, instead of a shell argument |
+| `check <code> [--since <id>] [--exclude-self] [--wait] [--timeout <s>] [--json]` | Read messages, optionally blocking until one arrives |
+| `recent [--limit N] [--json]` | The last few messages across every conversation, not just one |
+| `list [--json]` | Show every known conversation |
+| `log <code> [--json]` | Full history for any conversation, regardless of caller |
 | `rename <code> "title"` | Rename a conversation |
 | `purge <code>` / `purge --older-than <duration>` | Delete a conversation. Manual only — nothing expires automatically |
+
+Every message carries two numbers: `#N` is its position in that one conversation; `(id M)` is a global id shared across every conversation on the machine, used only for `--since`. Don't infer anything from the global id alone — use `#N`, or `--exclude-self` to filter your own sends.
 
 The database lives at `~/.config/sessionmail/mailbox.db` by default (`$XDG_CONFIG_HOME` if set), overridable with `--db <path>` or `SESSIONMAIL_DB`.
 
@@ -78,7 +81,7 @@ codex plugin marketplace add aicayzer/sessionmail
 
 - **No Slack backend.** If both sides of a pairing already have their own Slack tool access, that's an equally valid channel — just not one SessionMail builds or owns.
 - **No automatic expiry.** `purge` is the only way anything gets deleted.
-- **No group conversations.** A code addresses exactly two sides.
+- **No enforced group limit, but no group-conversation features either.** A code isn't access-controlled — nothing stops a third party joining — but there's no roster, no participant tracking, and the two-sides model is the intended shape.
 - **No session liveness checking.** Nothing here can tell you whether the other side's process is still running.
 
 ## Licence

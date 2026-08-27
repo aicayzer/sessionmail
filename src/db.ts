@@ -21,13 +21,32 @@ export function getDb(explicitPath?: string): DatabaseSync {
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT NOT NULL REFERENCES conversations(code),
+      seq INTEGER NOT NULL DEFAULT 0,
       provenance TEXT NOT NULL,
       text TEXT NOT NULL,
       sent_at TEXT NOT NULL
     );
   `);
+  ensureSeqColumn(db);
 
   cachedDb = db;
   cachedPath = path;
   return db;
+}
+
+// The seq column was added after messages already existed in some databases.
+// CREATE TABLE IF NOT EXISTS is a no-op there, so back-fill it explicitly:
+// a per-conversation count of messages up to and including each row.
+function ensureSeqColumn(db: DatabaseSync): void {
+  const columns = db.prepare("PRAGMA table_info(messages)").all() as { name: string }[];
+  if (columns.some((column) => column.name === "seq")) return;
+
+  db.exec("ALTER TABLE messages ADD COLUMN seq INTEGER NOT NULL DEFAULT 0");
+  db.exec(`
+    UPDATE messages
+    SET seq = (
+      SELECT COUNT(*) FROM messages AS earlier
+      WHERE earlier.code = messages.code AND earlier.id <= messages.id
+    )
+  `);
 }

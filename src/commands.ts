@@ -15,6 +15,7 @@ export interface ConversationSummary extends Conversation {
 export interface MessageRow {
   id: number;
   code: string;
+  seq: number;
   provenance: string;
   text: string;
   sent_at: string;
@@ -50,7 +51,12 @@ export function send(
   text: string,
   title: string | undefined,
   dbPath?: string
-): { id: number } {
+): { id: number; seq: number } {
+  if (text.trim().length === 0) {
+    throw new Error(
+      "Message body is empty. Refusing to send — pass real text, or use --body-file to read it from a file."
+    );
+  }
   const db = getDb(dbPath);
   const convo = db.prepare("SELECT code FROM conversations WHERE code = ?").get(code);
   if (!convo) {
@@ -63,26 +69,44 @@ export function send(
   }
   const provenance = JSON.stringify(captureProvenance());
   const sent_at = new Date().toISOString();
+  const { maxSeq } = db
+    .prepare("SELECT COALESCE(MAX(seq), 0) AS maxSeq FROM messages WHERE code = ?")
+    .get(code) as { maxSeq: number };
+  const seq = maxSeq + 1;
   const result = db
-    .prepare("INSERT INTO messages (code, provenance, text, sent_at) VALUES (?, ?, ?, ?)")
-    .run(code, provenance, text, sent_at);
-  return { id: Number(result.lastInsertRowid) };
+    .prepare("INSERT INTO messages (code, seq, provenance, text, sent_at) VALUES (?, ?, ?, ?, ?)")
+    .run(code, seq, provenance, text, sent_at);
+  return { id: Number(result.lastInsertRowid), seq };
 }
 
-export function check(code: string, since: number | undefined, dbPath?: string): MessageRow[] {
+export function check(
+  code: string,
+  since: number | undefined,
+  excludeSelf: boolean,
+  dbPath?: string
+): MessageRow[] {
   const db = getDb(dbPath);
-  if (since !== undefined) {
-    return db
-      .prepare("SELECT * FROM messages WHERE code = ? AND id > ? ORDER BY id ASC")
-      .all(code, since) as unknown as MessageRow[];
-  }
-  return db
-    .prepare("SELECT * FROM messages WHERE code = ? ORDER BY id ASC")
-    .all(code) as unknown as MessageRow[];
+  const rows = (
+    since !== undefined
+      ? db
+          .prepare("SELECT * FROM messages WHERE code = ? AND id > ? ORDER BY id ASC")
+          .all(code, since)
+      : db.prepare("SELECT * FROM messages WHERE code = ? ORDER BY id ASC").all(code)
+  ) as unknown as MessageRow[];
+
+  if (!excludeSelf) return rows;
+
+  const ownSessionId = (captureProvenance() as { sessionId?: string }).sessionId;
+  if (!ownSessionId) return rows;
+
+  return rows.filter((row) => {
+    const provenance = JSON.parse(row.provenance) as { sessionId?: string };
+    return provenance.sessionId !== ownSessionId;
+  });
 }
 
 export function log(code: string, dbPath?: string): MessageRow[] {
-  return check(code, undefined, dbPath);
+  return check(code, undefined, false, dbPath);
 }
 
 export interface RecentMessageRow extends MessageRow {
