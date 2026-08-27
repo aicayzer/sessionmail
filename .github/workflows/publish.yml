@@ -15,11 +15,14 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: "22.14"
+          # Trusted publishing needs npm >=11.5.1. Node 22.14 (this package's
+          # own floor) bundles npm 10.9.2, too old — Node 24 bundles a
+          # compliant npm already. npm 12+ in turn needs Node >=22.22.2/24.15,
+          # so pin rather than chase "latest" here.
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
-      # Trusted publishing needs npm >=11.5.1; Node 22.14's bundled npm predates that.
-      - run: npm install -g npm@latest
+      - run: npm install -g npm@^11.5.1
       - run: npm ci
       - run: npm test
       - run: npm publish
