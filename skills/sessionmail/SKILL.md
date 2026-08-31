@@ -18,17 +18,16 @@ Two sides exchange a short code, relayed by the person running both agents.
 To start a new conversation:
 
 1. Run `sessionmail pair`.
-2. Report the exact command for the other side to run **on its own line**, so it's trivial to copy — for example:
+2. Report the code and the join command for the other side, each **on its own line** so they're trivial to copy — for example:
 
    Pairing code: `stark-sparrow-11`
 
    `sessionmail join stark-sparrow-11`
 
-   Pass that command to the other agent.
-3. On macOS, also copy the join command to the clipboard (`echo "sessionmail join stark-sparrow-11" | pbcopy`) and say that you did. Skip this silently if `pbcopy` isn't available — don't treat it as an error.
-4. If the conversation is still empty after you pair or join, send a short opener yourself (e.g. `sessionmail send <code> "joined, ready"`) rather than leaving it silent. That way the other side gets confirmation the pairing worked the next time it checks, instead of finding nothing and having to guess whether it worked.
+3. On macOS, copy the join command to the clipboard silently (`echo "sessionmail join stark-sparrow-11" | pbcopy`) — don't narrate that you did. Skip silently if `pbcopy` isn't available.
+4. **If the other side turns out to already have a different code, `sessionmail purge <the-code-you-just-minted>` before proceeding** — don't leave an unused pairing behind.
 
-To join an existing conversation, run `sessionmail join <code>` with the code you were given.
+To join an existing conversation, run `sessionmail join <code>` with the code you were given. **If the conversation is still empty, send a short opener** (e.g. `sessionmail send <code> "joined, ready"`) so the other side has confirmation next time it checks, instead of finding nothing and having to guess whether it worked. Don't send an opener right after `pair` — nobody could have joined yet.
 
 From then on, both sides address the conversation by that code. There's no other identity system — don't try to register a name or guess which account you're running under.
 
@@ -58,6 +57,30 @@ There's no notification — checking is always a deliberate act. Check:
 - Periodically during a long unattended run, if you're expecting a reply.
 
 **Prefer `check <code> --since <id> --wait` over hand-rolling a sleep loop.** It blocks until a new message arrives or the timeout elapses (default 300s, set with `--timeout`), so you don't need your own `sleep`-and-retry logic. Add `--exclude-self` if you don't want to be woken by your own sends. Add `--json` when parsing output in a script — it's structured and safe to parse, unlike the human-formatted default.
+
+### Watching for the rest of a session (Claude Code)
+
+For a watch that needs to keep firing across a whole session rather than a single wait, wrap a loop of `check --wait` in the Monitor tool, set `persistent: true`, and filter on the parsed JSON rather than raw text — `check` always prints *something* on every call, so a text-line filter risks treating "no new messages" as an event:
+
+```bash
+last=<id>
+fail=0
+while true; do
+  if out=$(sessionmail check <code> --since "$last" --wait --timeout 290 --json --exclude-self 2>/dev/null); then
+    fail=0
+    n=$(jq 'length' <<<"$out")
+    if [ "$n" -gt 0 ]; then
+      jq -r '.[] | "#\(.seq): \(.text)"' <<<"$out"
+      last=$(jq '[.[].id] | max' <<<"$out")
+    fi
+  else
+    fail=$((fail + 1))
+    [ "$fail" -ge 3 ] && { echo "sessionmail check failing (${fail}x) — watch may be broken"; fail=0; }
+  fi
+done
+```
+
+Codex has no equivalent — confirmed against `openai/codex` docs and issue tracker; a persistent, agent-callable background-event tool is [an open, unimplemented request](https://github.com/openai/codex/issues/29922). On Codex, use the same `--wait`/`--json` core in a plain loop instead.
 
 ## More than two sides
 

@@ -8,7 +8,7 @@ const program = new Command();
 program
   .name("sessionmail")
   .description("A local, paired mailbox for AI coding agents that can't otherwise reach each other.")
-  .version("0.2.0")
+  .version("0.2.1")
   .option("--db <path>", "override the mailbox database path");
 
 function dbPath(): string | undefined {
