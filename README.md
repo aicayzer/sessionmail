@@ -1,8 +1,12 @@
 # SessionMail: a fallback mailbox for AI coding agents
 
-Claude Code sessions on the same account can already message each other directly. Codex sessions can too. **Neither can reach the other** — a different account, a different tool, a different machine process, they're all invisible to each other. SessionMail is the gap-filler: two agents exchange a short pairing code by hand, through the person running both of them, and from then on leave each other messages in a local SQLite mailbox.
+[![npm version](https://img.shields.io/npm/v/sessionmail.svg)](https://www.npmjs.com/package/sessionmail)
+[![CI](https://github.com/aicayzer/sessionmail/actions/workflows/ci.yml/badge.svg)](https://github.com/aicayzer/sessionmail/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/npm/l/sessionmail.svg)](LICENSE)
 
-**This is a fallback, not an improvement on either tool's native messaging.** If two sessions can already talk to each other directly, use that — it's faster and needs no code to relay. Reach for SessionMail only when no direct channel exists.
+Claude Code and Codex sessions can already message other sessions of themselves directly. They can't reach each other, or a different account, or a different machine. SessionMail fills that gap: two agents exchange a short pairing code by hand, then leave each other messages in a local SQLite mailbox.
+
+**A fallback, not a replacement.** If two sessions can already talk directly, use that instead — it's faster and needs no code to relay.
 
 ## Getting started
 
@@ -12,20 +16,20 @@ npm install -g sessionmail
 brew install aicayzer/tap/sessionmail
 ```
 
-One side starts a conversation and gets a code back:
+One side starts a conversation:
 
 ```
 $ sessionmail pair
 brave-fox-42
 ```
 
-Give that code to the other agent (or its operator). The other side confirms it, then either can send:
+Give the code to the other agent. Either side can then send and check:
 
 ```
 $ sessionmail join brave-fox-42
 Joined "brave-fox-42" (brave-fox-42).
 
-$ sessionmail send brave-fox-42 "found the bug, it's in the retry loop" --title "retry bug"
+$ sessionmail send brave-fox-42 "found the bug, it's in the retry loop"
 Sent — conversation message #1 (id 1).
 
 $ sessionmail check brave-fox-42
@@ -35,13 +39,10 @@ found the bug, it's in the retry loop
 
 ## How it works
 
-Neither Claude Code nor Codex can be woken by an external event today — both are strictly turn-driven, confirmed against their own official documentation. So SessionMail doesn't pretend otherwise: there's no push, no notification. What it does do is save every consumer from reimplementing the same poll loop badly: `check <code> --since <id> --wait` blocks inside one call until a new message arrives or a timeout elapses, rather than everyone hand-rolling their own sleep-and-retry.
-
-**Addressing is the pairing code itself, not a persistent identity.** An agent can't always tell which account or profile it's running under, so nothing here depends on it self-reporting one. The code is minted once, by the tool, and relayed by a human — that's the whole mechanism.
-
-**Provenance is automatic and allowlisted.** Every message is tagged with whatever the sending process's environment reveals about itself — session id, working directory, and (for Claude Code) which account, all read from environment variables the session already exports to its own subprocesses. Only a fixed, named set of fields is ever captured; nothing resembling a full environment dump, since that environment also holds live credentials.
-
-**There's no privacy model.** Any agent with access to the database can list and read every conversation, not only ones it's a party to — that's deliberate, since context usually matters more than confidentiality here.
+- **No push, no notification.** Neither tool can be woken by an external event today, so checking is always a deliberate act. `check <code> --wait` blocks inside one call until a message arrives, instead of every consumer hand-rolling a poll loop.
+- **The pairing code is the address.** There's no persistent identity system — an agent can't always tell which account it's running under, so nothing depends on it self-reporting one.
+- **Provenance is automatic and allowlisted.** Every message is tagged with a fixed, named set of fields (session id, working directory, account) read from the environment — never a full environment dump.
+- **No privacy model.** Anyone with access to the database can list and read every conversation, not only ones they're a party to.
 
 ## Commands
 
@@ -58,13 +59,13 @@ Neither Claude Code nor Codex can be woken by an external event today — both a
 | `rename <code> "title"` | Rename a conversation |
 | `purge <code>` / `purge --older-than <duration>` | Delete a conversation. Manual only — nothing expires automatically |
 
-Every message carries two numbers: `#N` is its position in that one conversation; `(id M)` is a global id shared across every conversation on the machine, used only for `--since`. Don't infer anything from the global id alone — use `#N`, or `--exclude-self` to filter your own sends.
+Every message carries two numbers: `#N` is its position in that conversation; `(id M)` is a global id shared across every conversation on the machine, used only for `--since`.
 
-The database lives at `~/.config/sessionmail/mailbox.db` by default (`$XDG_CONFIG_HOME` if set), overridable with `--db <path>` or `SESSIONMAIL_DB`.
+The database lives at `~/.config/sessionmail/mailbox.db` by default, overridable with `--db <path>` or `SESSIONMAIL_DB`.
 
 ## Using it from Claude Code or Codex
 
-Both ship as a skills-only plugin from this repository — no MCP server, on either side.
+Ships as a skills-only plugin from this repo — no MCP server on either side.
 
 **Claude Code:**
 ```
@@ -79,10 +80,10 @@ codex plugin marketplace add aicayzer/sessionmail
 
 ## Not included, on purpose
 
-- **No Slack backend.** If both sides of a pairing already have their own Slack tool access, that's an equally valid channel — just not one SessionMail builds or owns.
+- **No Slack backend.** If both sides already have their own Slack tool access, that's an equally valid channel — just not one SessionMail owns.
 - **No automatic expiry.** `purge` is the only way anything gets deleted.
-- **No enforced group limit, but no group-conversation features either.** A code isn't access-controlled — nothing stops a third party joining — but there's no roster, no participant tracking, and the two-sides model is the intended shape.
-- **No session liveness checking.** Nothing here can tell you whether the other side's process is still running.
+- **No group-conversation features.** A code isn't access-controlled, but there's no roster or participant tracking.
+- **No liveness checking.** Nothing here can tell you whether the other side's process is still running.
 
 ## Licence
 
